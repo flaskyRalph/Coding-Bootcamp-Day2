@@ -1,97 +1,229 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, FlatList } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { addBooking, getBookings, updateBooking, Booking, Role } from "../lib/bookingsStore";
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
+import React, { useEffect, useState } from "react";
+import { Alert, FlatList, Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Button, Dialog, Portal, useTheme } from 'react-native-paper';
+
+import { createBooking, getMyBookings } from '../../app/lib/Bookings';
+import { auth } from '../../app/lib/firebase';
+import { getServices } from '../../app/lib/Services';
+import { uploadFile } from '../../app/lib/Storage'; // Import uploadFile
+import DocumentPicker from '../../components/DocumentPicker'; // Import DocumentPicker
+
+interface Service {
+  id: string;
+  name: string;
+  requirements: string;
+  fee: number;
+}
+
+interface Booking {
+  id?: string;
+  userId: string;
+  serviceId: string;
+  date: string;
+  time: string;
+  status: "pending" | "approved" | "rejected";
+  attachmentUrl?: string;
+}
 
 export default function AppointmentsScreen() {
-  const params = useLocalSearchParams();
-  const role = (params.role as Role) || "Resident";
+  const theme = useTheme();
+  const [services, setServices] = useState<Service[]>([]);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [time, setTime] = useState(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [myBookings, setMyBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pickedDocument, setPickedDocument] = useState<{ uri: string; name: string } | null>(null); // State for picked document
 
-  const [service, setService] = React.useState("");
-  const [date, setDate] = React.useState("");
-  const [fee, setFee] = React.useState<number>(0);
-  const [bookings, setBookings] = React.useState<Booking[]>(getBookings());
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const fetchedServices = await getServices();
+        setServices(fetchedServices);
+        if (fetchedServices.length > 0) {
+          setSelectedService(fetchedServices[0].id);
+        }
 
-  React.useEffect(() => {
-    setBookings(getBookings());
+        if (auth.currentUser) {
+          const fetchedBookings = await getMyBookings(auth.currentUser.uid);
+          setMyBookings(fetchedBookings);
+        }
+      } catch (error: any) {
+        Alert.alert('Error', error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
   }, []);
 
-  function submitBooking() {
-    if (!service || !date) return;
-    const newB = addBooking({
-      role,
-      service,
-      date,
-      documents: [],
-      status: "Pending",
-      fee_due: fee,
-      payment_status: fee > 0 ? "unpaid" : null,
-    });
-    setBookings(getBookings());
-    // simple feedback
-    setService("");
-    setDate("");
-    setFee(0);
-    alert(`Booking requested: ${newB.id}`);
-  }
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
+  };
 
-  function toggleApprove(id: string) {
-    const b = getBookings().find((x) => x.id === id);
-    if (!b) return;
-    const next: any = b.status === "Pending" ? "Approved" : b.status === "Approved" ? "Completed" : "Pending";
-    updateBooking(id, { status: next });
-    setBookings(getBookings());
-  }
+  const onChangeTime = (event: any, selectedTime?: Date) => {
+    const currentTime = selectedTime || time;
+    setShowTimePicker(Platform.OS === 'ios');
+    setTime(currentTime);
+  };
 
-  function markPaidOnSite(id: string) {
-    updateBooking(id, { payment_status: "paid_on_site", payment_received_by: "StaffUser", payment_timestamp: new Date().toISOString() });
-    setBookings(getBookings());
+  const showDatepicker = () => {
+    setShowDatePicker(true);
+  };
+
+  const showTimepicker = () => {
+    setShowTimePicker(true);
+  };
+
+  const handleDocumentPicked = (uri: string, name: string) => {
+    setPickedDocument({ uri, name });
+  };
+
+  const handleSubmitBooking = async () => {
+    if (!selectedService || !auth.currentUser) {
+      Alert.alert('Error', 'Please select a service and ensure you are logged in.');
+      return;
+    }
+
+    let attachmentUrl: string | undefined;
+    if (pickedDocument) {
+      try {
+        const path = `booking_attachments/${auth.currentUser.uid}/${pickedDocument.name}`;
+        attachmentUrl = await uploadFile(pickedDocument.uri, path);
+        Alert.alert('Success', 'Document uploaded!');
+      } catch (error: any) {
+        Alert.alert('Error', `Failed to upload document: ${error.message}`);
+        return;
+      }
+    }
+
+    try {
+      const service = services.find(s => s.id === selectedService);
+      if (!service) {
+        Alert.alert('Error', 'Selected service not found.');
+        return;
+      }
+
+      await createBooking({
+        userId: auth.currentUser.uid,
+        serviceId: selectedService,
+        date: date.toISOString().split('T')[0],
+        time: time.toTimeString().split(' ')[0],
+        attachmentUrl, // Include attachmentUrl in the booking
+      });
+      Alert.alert('Success', 'Booking request submitted!');
+
+      if (auth.currentUser) {
+        const fetchedBookings = await getMyBookings(auth.currentUser.uid);
+        setMyBookings(fetchedBookings);
+      }
+      setPickedDocument(null); // Clear picked document after submission
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading services and bookings...</Text>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{role} Appointments</Text>
+      <Text style={styles.title}>Book a Service</Text>
 
-      {role === "Resident" ? (
-        <View style={{ width: "100%" }}>
-          <TextInput placeholder="Service name" value={service} onChangeText={setService} style={styles.input} />
-          <TextInput placeholder="Date & time" value={date} onChangeText={setDate} style={styles.input} />
-          <TextInput placeholder="Fee if any (numeric)" value={String(fee)} onChangeText={(t) => setFee(Number(t) || 0)} style={styles.input} keyboardType="numeric" />
-          <TouchableOpacity style={styles.button} onPress={submitBooking}>
-            <Text style={styles.buttonText}>Request Booking</Text>
-          </TouchableOpacity>
-        </View>
+      <Picker
+        selectedValue={selectedService}
+        onValueChange={(itemValue) => setSelectedService(itemValue)}
+        style={styles.picker}
+      >
+        {services.map((service) => (
+          <Picker.Item key={service.id} label={service.name} value={service.id} />
+        ))}
+      </Picker>
+
+      <View style={styles.dateTimeContainer}>
+        <Button mode="outlined" onPress={showDatepicker} style={styles.dateTimeButton}>
+          Select Date: {date.toLocaleDateString()}
+        </Button>
+        <Portal>
+          <Dialog visible={showDatePicker} onDismiss={() => setShowDatePicker(false)}>
+            <Dialog.Title>Select Date</Dialog.Title>
+            <Dialog.Content>
+              <DateTimePicker
+                testID="datePicker"
+                value={date}
+                mode="date"
+                display="spinner"
+                onChange={onChangeDate}
+              />
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setShowDatePicker(false)}>Confirm</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+
+        <Button mode="outlined" onPress={showTimepicker} style={styles.dateTimeButton}>
+          Select Time: {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Button>
+        <Portal>
+          <Dialog visible={showTimePicker} onDismiss={() => setShowTimePicker(false)}>
+            <Dialog.Title>Select Time</Dialog.Title>
+            <Dialog.Content>
+              <DateTimePicker
+                testID="timePicker"
+                value={time}
+                mode="time"
+                is24Hour={false}
+                display="spinner"
+                onChange={onChangeTime}
+              />
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setShowTimePicker(false)}>Confirm</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+      </View>
+
+      <DocumentPicker onDocumentPicked={handleDocumentPicked} />
+      {pickedDocument && <Text style={styles.documentText}>Selected: {pickedDocument.name}</Text>}
+
+      <Button mode="contained" onPress={handleSubmitBooking} style={styles.button}>
+        Submit Booking Request
+      </Button>
+
+      <Text style={[styles.title, { marginTop: 30 }]}>My Bookings</Text>
+      {myBookings.length === 0 ? (
+        <Text>No bookings found.</Text>
       ) : (
-        <View style={{ width: "100%" }}>
-          <Text style={styles.text}>Staff Booking Management</Text>
-        </View>
+        <FlatList
+          data={myBookings}
+          keyExtractor={(item) => item.id!}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <Text style={styles.text}>Service: {services.find(s => s.id === item.serviceId)?.name}</Text>
+              <Text style={styles.text}>Date: {item.date}</Text>
+              <Text style={styles.text}>Time: {item.time}</Text>
+              <Text style={styles.text}>Status: {item.status}</Text>
+              {item.attachmentUrl && (
+                <Text style={styles.text}>Attachment: <Text style={styles.link} onPress={() => Linking.openURL(item.attachmentUrl!)}>View Document</Text></Text>
+              )}
+            </View>
+          )}
+          style={styles.list}
+        />
       )}
-
-      <Text style={[styles.title, { fontSize: 18, marginTop: 20 }]}>All Bookings</Text>
-      <FlatList
-        data={bookings}
-        keyExtractor={(i) => i.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.text}>#{item.id} — {item.service}</Text>
-            <Text style={styles.text}>Date: {item.date}</Text>
-            <Text style={styles.text}>Status: {item.status}</Text>
-            <Text style={styles.text}>Fee due: ₱{item.fee_due}</Text>
-            <Text style={styles.text}>Payment: {item.payment_status || "n/a"}</Text>
-            {role === "Staff" && (
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <TouchableOpacity style={styles.smallButton} onPress={() => toggleApprove(item.id)}>
-                  <Text style={styles.buttonText}>Toggle Approve/Complete</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.smallButton} onPress={() => markPaidOnSite(item.id)}>
-                  <Text style={styles.buttonText}>Mark Paid</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-        style={{ width: "100%" }}
-      />
     </View>
   );
 }
@@ -100,14 +232,66 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "#f5f5f5",
     alignItems: "center",
   },
-  title: { fontSize: 20, fontWeight: "700", marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: "#ddd", padding: 10, borderRadius: 8, marginBottom: 8 },
-  button: { backgroundColor: "#007bff", padding: 12, borderRadius: 8, alignItems: "center" },
-  smallButton: { backgroundColor: "#28a745", padding: 8, borderRadius: 6, marginTop: 8 },
-  buttonText: { color: "#fff", fontWeight: "600" },
-  text: { marginVertical: 4 },
-  card: { backgroundColor: "#f8f9fa", padding: 12, borderRadius: 8, marginVertical: 8 },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 20,
+    color: '#333',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  dateTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+  },
+  dateTimeButton: {},
+  button: {
+    width: '100%',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  list: {
+    width: '100%',
+  },
+  card: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 8,
+    marginVertical: 8,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#eee',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
+  },
+  text: {
+    marginVertical: 4,
+    fontSize: 16,
+  },
+  documentText: {
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  link: {
+    color: '#007bff',
+    textDecorationLine: 'underline',
+  },
 });

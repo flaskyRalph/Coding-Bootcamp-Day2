@@ -26,6 +26,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "mode": "development",
+          "supportsTablet": true,
+          "allowDisplayInForeground": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

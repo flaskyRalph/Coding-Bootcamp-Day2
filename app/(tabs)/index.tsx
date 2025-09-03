@@ -1,118 +1,104 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import { Card, Paragraph, Title } from 'react-native-paper';
+import { getAnnouncements } from '../../app/lib/Announcements';
 
+interface Announcement {
+  id?: string;
+  title: string;
+  content: string;
+  date: string;
+  postedBy: string;
+}
 
-// This is the main screen for the (tabs)/index route in Expo Router
-export default function HomeScreen() {
-  const router = useRouter();
-  // Dummy Data for History
-  const logs = [
-    { id: "1", user: "Juan Dela Cruz", date: "2025-08-10", status: "Completed" },
-    { id: "2", user: "Maria Santos", date: "2025-08-15", status: "Pending" },
-  ];
+export default function CommunityScreen() {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [role, setRole] = React.useState<string | null>(null);
+  useEffect(() => {
+    const loadAnnouncements = async () => {
+      try {
+        const fetchedAnnouncements = await getAnnouncements();
+        setAnnouncements(fetchedAnnouncements);
+      } catch (error: any) {
+        Alert.alert('Error', error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAnnouncements();
+  }, []);
 
-  if (!role) {
-    // Role selection screen
+  if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Barangay Buddy App</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => setRole("Resident")}
-        >
-          <Text style={styles.buttonText}>I am a Resident</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => setRole("Staff")}
-        >
-          <Text style={styles.buttonText}>I am a Barangay Staff</Text>
-        </TouchableOpacity>
+        <Text>Loading announcements...</Text>
       </View>
     );
   }
 
-  // Dashboard
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{role} Dashboard</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => setRole(null)}
-      >
-        <Text style={styles.buttonText}>Back to Role Selection</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push({ pathname: "/(tabs)/appointments", params: { role } })}
-      >
-        <Text style={styles.buttonText}>Appointments</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push({ pathname: "/(tabs)/history", params: { role } })}
-      >
-        <Text style={styles.buttonText}>Booking History</Text>
-      </TouchableOpacity>
-      {/* Optionally show a static history preview */}
-      <Text style={[styles.title, { fontSize: 18, marginTop: 30 }]}>Sample History</Text>
-      <FlatList
-        data={logs}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.text}>👤 {item.user}</Text>
-            <Text style={styles.text}>📅 {item.date}</Text>
-            <Text style={styles.text}>✅ {item.status}</Text>
-          </View>
-        )}
-        style={{ width: "100%" }}
-      />
+      <Title style={styles.title}>Community Feed</Title>
+      {announcements.length === 0 ? (
+        <Paragraph>No announcements posted yet.</Paragraph>
+      ) : (
+        <FlatList
+          data={announcements}
+          keyExtractor={(item) => item.id!}
+          renderItem={({ item }) => (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title style={styles.cardTitle}>{item.title}</Title>
+                <Paragraph style={styles.text}>{item.content}</Paragraph>
+                <Paragraph style={styles.dateText}>Posted by: {item.postedBy} on {new Date(item.date).toLocaleDateString()}</Paragraph>
+              </Card.Content>
+            </Card>
+          )}
+          style={styles.list}
+        />
+      )}
     </View>
   );
 }
 
-// ✅ Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     padding: 20,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
   },
   title: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: "bold",
     marginBottom: 20,
-    color: "#2c3e50",
+    color: '#333',
   },
-  button: {
-    backgroundColor: "#007bff",
-    padding: 15,
-    borderRadius: 10,
+  list: {
+    width: '100%',
+  },
+  card: {
     marginVertical: 8,
-    width: "80%",
-    alignItems: "center",
+    width: '100%',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1.5,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
   text: {
     fontSize: 16,
-    marginVertical: 5,
+    marginBottom: 2,
   },
-  card: {
-    backgroundColor: "#fff",
-    padding: 15,
-    marginVertical: 8,
-    borderRadius: 10,
-    width: "100%",
-    elevation: 2,
+  dateText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
   },
 });
