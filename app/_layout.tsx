@@ -10,7 +10,6 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import { registerForPushNotificationsAsync, savePushTokenToFirestore } from './lib/Notifications';
-import { syncAnnouncementsWithFirestore, syncBookingsWithFirestore, syncServicesWithFirestore } from './lib/OfflineSync'; // Import sync functions
 import LoginScreen from './LoginScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -24,8 +23,7 @@ function RootLayoutNav() {
     </Stack>
   );
 }
-
-export default function RootLayout() {
+export function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -38,10 +36,7 @@ export default function RootLayout() {
     const unsubscribeNetInfo = NetInfo.addEventListener(state => {
       setIsOnline(state.isConnected || false); // Update online status
       if (state.isConnected) {
-        console.log('Device is online, attempting to sync data...');
-        syncBookingsWithFirestore();
-        syncAnnouncementsWithFirestore();
-        syncServicesWithFirestore();
+        console.log('Device is online');
       }
     });
 
