@@ -1,7 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
-import { loadServicesLocally, saveServicesLocally } from './OfflineSync';
+import { loadServicesLocally, saveServicesLocally } from './services/offline.service';
 
 interface Service {
   id: string;

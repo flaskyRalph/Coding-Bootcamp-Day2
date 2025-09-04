@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Alert, FlatList, Linking, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Paragraph, Title } from 'react-native-paper';
-import { getAllBookings, updateBookingStatus } from '../../app/lib/Bookings';
 import { sendPushNotification } from '../../app/lib/Notifications';
 import { getServices } from '../../app/lib/Services';
 import { fetchUserProfile } from '../../app/lib/User';
+import { getAllBookings, updateBookingStatus } from '../lib/api/bookings';
 
 interface Booking {
   id?: string;

@@ -1,88 +1,66 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
-
+// app/(tabs)/_layout.tsx
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { useAuth } from '../../app/lib/AuthContext'; // Import useAuth
+import { Tabs } from 'expo-router';
+import React, { useMemo } from 'react';
+import { Platform } from 'react-native';
+import { useAuth } from '../lib/context/AuthContext';
+
+interface TabConfig {
+  name: string;
+  title: string;
+  icon: string;
+  requiredRole?: 'admin' | 'resident';
+}
+
+const TABS: TabConfig[] = [
+  { name: 'index', title: 'Community', icon: 'message.fill' },
+  { name: 'appointments', title: 'Appointments', icon: 'calendar' },
+  { name: 'history', title: 'History', icon: 'clock.fill' },
+  { name: 'profile', title: 'Profile', icon: 'person.crop.circle' },
+  { name: '(admin)/dashboard', title: 'Admin', icon: 'hammer.fill', requiredRole: 'admin' },
+  { name: '(admin)/announcements', title: 'Announcements', icon: 'megaphone.fill', requiredRole: 'admin' },
+  { name: '(admin)/reports', title: 'Reports', icon: 'chart.bar.fill', requiredRole: 'admin' },
+];
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { userRole } = useAuth(); // Get userRole from context
+  const { user } = useAuth();
+
+  const visibleTabs = useMemo(() => {
+    return TABS.filter(tab => 
+      !tab.requiredRole || tab.requiredRole === user?.role
+    );
+  }, [user?.role]);
+
+  const screenOptions = useMemo(() => ({
+    tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+    headerShown: false,
+    tabBarButton: HapticTab,
+    tabBarBackground: TabBarBackground,
+    tabBarStyle: Platform.select({
+      ios: { position: 'absolute' as const },
+      default: {},
+    }),
+  }), [colorScheme]);
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Community',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="appointments"
-        options={{
-          title: 'Appointments',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'History',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clock.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
-        }}
-      />
-      {userRole === 'admin' && (
+    <Tabs screenOptions={screenOptions}>
+      {visibleTabs.map(tab => (
         <Tabs.Screen
-          name="admin"
+          key={tab.name}
+          name={tab.name}
           options={{
-            title: 'Admin',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="hammer.fill" color={color} />,
+            title: tab.title,
+            tabBarIcon: ({ color }) => (
+              <IconSymbol size={28} name={tab.icon} color={color} />
+            ),
           }}
         />
-      )}
-      {userRole === 'admin' && (
-        <Tabs.Screen
-          name="post-announcement"
-          options={{
-            title: 'Post Announcement',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="megaphone.fill" color={color} />,
-          }}
-        />
-      )}
-      {userRole === 'admin' && (
-        <Tabs.Screen
-          name="reports"
-          options={{
-            title: 'Reports',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-          }}
-        />
-      )}
+      ))}
     </Tabs>
   );
 }

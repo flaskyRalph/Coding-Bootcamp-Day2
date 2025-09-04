@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { Card, Paragraph, Text, Title } from 'react-native-paper';
-import { getAllBookings } from '../../app/lib/Bookings';
 import { getServices } from '../../app/lib/Services';
+import { getAllBookings } from '../lib/api/bookings';
 
 interface Booking {
   id?: string;

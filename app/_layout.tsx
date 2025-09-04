@@ -8,9 +8,9 @@ import { MD3DarkTheme, MD3LightTheme, Provider as PaperProvider } from 'react-na
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider, useAuth } from './lib/AuthContext';
+import { AuthProvider, useAuth } from './lib/context/AuthContext';
 import { registerForPushNotificationsAsync, savePushTokenToFirestore } from './lib/Notifications';
-import { syncAnnouncementsWithFirestore, syncBookingsWithFirestore, syncServicesWithFirestore } from './lib/OfflineSync'; // Import sync functions
+import { syncAnnouncementsWithFirestore, syncBookingsWithFirestore, syncServicesWithFirestore } from './lib/services/offline.service'; // Import sync functions
 import LoginScreen from './LoginScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
