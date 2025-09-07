@@ -1,7 +1,7 @@
-import React from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { getBookings, updateBooking, Booking } from "../lib/bookingsStore";
+import React from "react";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Booking, getBookings, updateBooking } from "../../lib/bookingsStore";
 
 export default function HistoryScreen() {
   const params = useLocalSearchParams();

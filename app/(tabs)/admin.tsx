@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Alert, FlatList, Linking, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Paragraph, Title } from 'react-native-paper';
-import { getAllBookings, updateBookingStatus } from '../../app/lib/Bookings';
-import { sendPushNotification } from '../../app/lib/Notifications';
-import { getServices } from '../../app/lib/Services';
-import { fetchUserProfile } from '../../app/lib/User';
+import AdminGuard from '../../components/AdminGuard';
+import { getAllBookings, updateBookingStatus } from '../../lib/Bookings';
+import { sendPushNotification } from '../../lib/Notifications';
+import { getServices } from '../../lib/Services';
+import { fetchUserProfile } from '../../lib/User';
 
 interface Booking {
   id?: string;
@@ -33,7 +34,7 @@ interface UserProfile {
   pushToken?: string;
 }
 
-export default function AdminScreen() {
+function AdminScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [users, setUsers] = useState<Record<string, UserProfile>>({});
@@ -98,53 +99,57 @@ export default function AdminScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Title style={styles.title}>Admin Dashboard</Title>
-      {bookings.length === 0 ? (
-        <Paragraph>No bookings found.</Paragraph>
-      ) : (
-        <FlatList
-          data={bookings}
-          keyExtractor={(item) => item.id!}
-          renderItem={({ item }) => (
-            <Card style={styles.card}>
-              <Card.Content>
-                <Title style={styles.cardTitle}>Booking ID: {item.id}</Title>
-                <Paragraph style={styles.text}>Service: {services.find(s => s.id === item.serviceId)?.name}</Paragraph>
-                <Paragraph style={styles.text}>Date: {item.date}</Paragraph>
-                <Paragraph style={styles.text}>Time: {item.time}</Paragraph>
-                <Paragraph style={styles.text}>Status: {item.status}</Paragraph>
-                <Paragraph style={styles.text}>Requested by: {users[item.userId]?.name || 'N/A'} ({users[item.userId]?.email || 'N/A'})</Paragraph>
-                {item.attachmentUrl && (
-                  <Paragraph style={styles.text}>Attachment: <Text style={styles.link} onPress={() => Linking.openURL(item.attachmentUrl!)}>View Document</Text></Paragraph>
-                )}
-              </Card.Content>
-              <Card.Actions style={styles.cardActions}>
-                <Button
-                  mode="contained"
-                  onPress={() => handleUpdateStatus(item.id!, item.userId, 'approved')}
-                  style={styles.button}
-                  labelStyle={styles.buttonText}
-                >
-                  Approve
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={() => handleUpdateStatus(item.id!, item.userId, 'rejected')}
-                  style={[styles.button, styles.rejectButton]}
-                  labelStyle={styles.buttonText}
-                >
-                  Reject
-                </Button>
-              </Card.Actions>
-            </Card>
-          )}
-          style={styles.list}
-        />
-      )}
-    </View>
+    <AdminGuard>
+      <View style={styles.container}>
+        <Title style={styles.title}>Admin Dashboard</Title>
+        {bookings.length === 0 ? (
+          <Paragraph>No bookings found.</Paragraph>
+        ) : (
+          <FlatList
+            data={bookings}
+            keyExtractor={(item) => item.id!}
+            renderItem={({ item }) => (
+              <Card style={styles.card}>
+                <Card.Content>
+                  <Title style={styles.cardTitle}>Booking ID: {item.id}</Title>
+                  <Paragraph style={styles.text}>Service: {services.find(s => s.id === item.serviceId)?.name}</Paragraph>
+                  <Paragraph style={styles.text}>Date: {item.date}</Paragraph>
+                  <Paragraph style={styles.text}>Time: {item.time}</Paragraph>
+                  <Paragraph style={styles.text}>Status: {item.status}</Paragraph>
+                  <Paragraph style={styles.text}>Requested by: {users[item.userId]?.name || 'N/A'} ({users[item.userId]?.email || 'N/A'})</Paragraph>
+                  {item.attachmentUrl && (
+                    <Paragraph style={styles.text}>Attachment: <Text style={styles.link} onPress={() => Linking.openURL(item.attachmentUrl!)}>View Document</Text></Paragraph>
+                  )}
+                </Card.Content>
+                <Card.Actions style={styles.cardActions}>
+                  <Button
+                    mode="contained"
+                    onPress={() => handleUpdateStatus(item.id!, item.userId, 'approved')}
+                    style={styles.button}
+                    labelStyle={styles.buttonText}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={() => handleUpdateStatus(item.id!, item.userId, 'rejected')}
+                    style={[styles.button, styles.rejectButton]}
+                    labelStyle={styles.buttonText}
+                  >
+                    Reject
+                  </Button>
+                </Card.Actions>
+              </Card>
+            )}
+            style={styles.list}
+          />
+        )}
+      </View>
+    </AdminGuard>
   );
 }
+
+export default AdminScreen;
 
 const styles = StyleSheet.create({
   container: {

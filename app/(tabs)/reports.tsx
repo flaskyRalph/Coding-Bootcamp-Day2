@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { Card, Paragraph, Text, Title } from 'react-native-paper';
-import { getAllBookings } from '../../app/lib/Bookings';
-import { getServices } from '../../app/lib/Services';
+import AdminGuard from '../../components/AdminGuard';
+import { getAllBookings } from '../../lib/Bookings';
+import { getServices } from '../../lib/Services';
 
 interface Booking {
   id?: string;
@@ -21,7 +22,7 @@ interface Service {
   fee: number;
 }
 
-export default function ReportsScreen() {
+function ReportsScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,37 +67,41 @@ export default function ReportsScreen() {
   }
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
-      <Title style={styles.title}>Reports & Analytics</Title>
+    <AdminGuard>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
+        <Title style={styles.title}>Reports & Analytics</Title>
 
-      <Card style={styles.statsCard}>
-        <Card.Content>
-          <Title style={styles.statsCardTitle}>Booking Overview</Title>
-          <Paragraph style={styles.statsText}>Total Bookings: {stats.total}</Paragraph>
-          <Paragraph style={styles.statsText}>Pending: {stats.pending}</Paragraph>
-          <Paragraph style={styles.statsText}>Approved: {stats.approved}</Paragraph>
-          <Paragraph style={styles.statsText}>Rejected: {stats.rejected}</Paragraph>
-        </Card.Content>
-      </Card>
+        <Card style={styles.statsCard}>
+          <Card.Content>
+            <Title style={styles.statsCardTitle}>Booking Overview</Title>
+            <Paragraph style={styles.statsText}>Total Bookings: {stats.total}</Paragraph>
+            <Paragraph style={styles.statsText}>Pending: {stats.pending}</Paragraph>
+            <Paragraph style={styles.statsText}>Approved: {stats.approved}</Paragraph>
+            <Paragraph style={styles.statsText}>Rejected: {stats.rejected}</Paragraph>
+          </Card.Content>
+        </Card>
 
-      <Title style={[styles.title, { marginTop: 20 }]}>Recent Bookings</Title>
-      {bookings.length === 0 ? (
-        <Paragraph>No recent bookings to display.</Paragraph>
-      ) : (
-        bookings.slice(0, 5).map(item => (
-          <Card key={item.id} style={styles.bookingCard}>
-            <Card.Content>
-              <Title style={styles.cardTitle}>Booking ID: {item.id}</Title>
-              <Paragraph style={styles.text}>Service: {services.find(s => s.id === item.serviceId)?.name}</Paragraph>
-              <Paragraph style={styles.text}>Date: {item.date}</Paragraph>
-              <Paragraph style={styles.text}>Status: {item.status}</Paragraph>
-            </Card.Content>
-          </Card>
-        ))
-      )}
-    </ScrollView>
+        <Title style={[styles.title, { marginTop: 20 }]}>Recent Bookings</Title>
+        {bookings.length === 0 ? (
+          <Paragraph>No recent bookings to display.</Paragraph>
+        ) : (
+          bookings.slice(0, 5).map(item => (
+            <Card key={item.id} style={styles.bookingCard}>
+              <Card.Content>
+                <Title style={styles.cardTitle}>Booking ID: {item.id}</Title>
+                <Paragraph style={styles.text}>Service: {services.find(s => s.id === item.serviceId)?.name}</Paragraph>
+                <Paragraph style={styles.text}>Date: {item.date}</Paragraph>
+                <Paragraph style={styles.text}>Status: {item.status}</Paragraph>
+              </Card.Content>
+            </Card>
+          ))
+        )}
+      </ScrollView>
+    </AdminGuard>
   );
 }
+
+export default ReportsScreen;
 
 const styles = StyleSheet.create({
   scrollView: {

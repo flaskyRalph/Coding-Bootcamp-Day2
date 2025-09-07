@@ -2,16 +2,15 @@
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { logoutUser } from './Auth';
 import { auth } from './firebase';
-import { getUserRole } from './User'; // keep your actual path
+import { getUserRole } from './User';
 
 interface AuthContextType {
   user: User | null;
   userRole: string | null;
   loading: boolean;
-  // optional helpers
-  // login?: (email: string, pass: string) => Promise<void>;
-  // logout?: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -24,9 +23,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
+        console.log('Auth state changed:', firebaseUser ? firebaseUser.uid : 'No user');
         setUser(firebaseUser);
         if (firebaseUser) {
+          console.log('Fetching user role for:', firebaseUser.uid);
           const role = await getUserRole(firebaseUser.uid);
+          console.log('User role fetched:', role);
           setUserRole(role ?? null);
         } else {
           setUserRole(null);
@@ -42,8 +44,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
+  const logout = async () => {
+    try {
+      await logoutUser();
+      // The onAuthStateChanged listener will handle updating the state
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userRole, loading }}>
+    <AuthContext.Provider value={{ user, userRole, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

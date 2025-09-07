@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { Button, TextInput, Title } from 'react-native-paper';
-import { createAnnouncement } from '../../app/lib/Announcements';
-import { auth } from '../../app/lib/firebase';
+import { createAnnouncement } from '../../lib/Announcements';
+import { auth } from '../../lib/firebase';
 
 export default function PostAnnouncementScreen() {
   const [title, setTitle] = useState('');

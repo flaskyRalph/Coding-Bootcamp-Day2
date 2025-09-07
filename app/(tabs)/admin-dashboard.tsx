@@ -2,10 +2,11 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Badge, Card, Paragraph, Title } from 'react-native-paper';
-import { useAuth } from '../../app/lib/AuthContext';
-import { getAllBookings } from '../../app/lib/Bookings';
+import AdminGuard from '../../components/AdminGuard';
+import { useAuth } from '../../lib/AuthContext';
+import { getAllBookings } from '../../lib/Bookings';
 
-export default function AdminDashboard() {
+function AdminDashboard() {
   const router = useRouter();
   const { userRole } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
@@ -23,14 +24,6 @@ export default function AdminDashboard() {
       console.error('Error loading pending count:', error);
     }
   };
-  
-  if (userRole !== 'admin') {
-    return (
-      <View style={styles.container}>
-        <Text>Access Denied</Text>
-      </View>
-    );
-  }
 
   const adminModules = [
     {
@@ -83,31 +76,35 @@ export default function AdminDashboard() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Title style={styles.title}>Admin Dashboard</Title>
-      <View style={styles.grid}>
-        {adminModules.map((module) => (
-          <TouchableOpacity 
-            key={module.id} 
-            style={styles.moduleCard}
-            onPress={() => handleModulePress(module.screen)}
-          >
-            <Card style={styles.card}>
-              <Card.Content>
-                <Text style={styles.icon}>{module.icon}</Text>
-                <Title style={styles.moduleTitle}>{module.title}</Title>
-                <Paragraph style={styles.description}>{module.description}</Paragraph>
-                {module.badge && module.badge > 0 && (
-                  <Badge style={styles.badge}>{module.badge}</Badge>
-                )}
-              </Card.Content>
-            </Card>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+    <AdminGuard>
+      <ScrollView style={styles.container}>
+        <Title style={styles.title}>Admin Dashboard</Title>
+        <View style={styles.grid}>
+          {adminModules.map((module) => (
+            <TouchableOpacity 
+              key={module.id} 
+              style={styles.moduleCard}
+              onPress={() => handleModulePress(module.screen)}
+            >
+              <Card style={styles.card}>
+                <Card.Content>
+                  <Text style={styles.icon}>{module.icon}</Text>
+                  <Title style={styles.moduleTitle}>{module.title}</Title>
+                  <Paragraph style={styles.description}>{module.description}</Paragraph>
+                  {module.badge && module.badge > 0 && (
+                    <Badge style={styles.badge}>{module.badge}</Badge>
+                  )}
+                </Card.Content>
+              </Card>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    </AdminGuard>
   );
 }
+
+export default AdminDashboard;
 
 const styles = StyleSheet.create({
   container: {

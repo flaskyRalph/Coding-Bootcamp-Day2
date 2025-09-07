@@ -8,8 +8,8 @@ import { MD3DarkTheme, MD3LightTheme, Provider as PaperProvider } from 'react-na
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider, useAuth } from './lib/AuthContext';
-import { registerForPushNotificationsAsync, savePushTokenToFirestore } from './lib/Notifications';
+import { AuthProvider, useAuth } from '../lib/AuthContext';
+import { registerForPushNotificationsAsync, savePushTokenToFirestore } from '../lib/Notifications';
 import LoginScreen from './LoginScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -31,6 +31,12 @@ export function RootLayout() {
 
   const { user, loading } = useAuth();
   const [isOnline, setIsOnline] = useState(true); // State to track online status
+
+  // Debug logging for user state
+  useEffect(() => {
+    console.log('Layout - User state changed:', user ? user.uid : 'No user');
+    console.log('Layout - Loading state:', loading);
+  }, [user, loading]);
 
   useEffect(() => {
     const unsubscribeNetInfo = NetInfo.addEventListener(state => {
