@@ -1,15 +1,41 @@
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  where
+} from 'firebase/firestore';
 import React, { useEffect, useState } from "react";
-import { Alert, Dimensions, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { ActivityIndicator, Button, Card, Dialog, Portal, Title } from 'react-native-paper';
+import {
+  Alert,
+  Dimensions,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import {
+  ActivityIndicator,
+  Button,
+  Card,
+  Dialog,
+  Portal,
+  Title
+} from 'react-native-paper';
 import DocumentPicker from '../../components/DocumentPicker';
-import { createBooking, getBookingsForDate, getMyBookings } from '../../lib/Bookings';
-import { auth } from '../../lib/firebase';
-import { getServices } from '../../lib/Services';
+import { auth, db } from '../../lib/firebase';
 import { uploadFile } from '../../lib/Storage';
 
 interface Service {
@@ -23,10 +49,21 @@ interface Booking {
   id?: string;
   userId: string;
   serviceId: string;
+  serviceName: string;
   date: string;
   time: string;
   status: 'pending' | 'approved' | 'rejected';
   attachmentUrl?: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  address: string;
+  district: string;
+  barangay: string;
+  notes?: string;
+  fee: number;
+  createdAt?: Timestamp;
+  appointmentId?: string;
 }
 
 const timeSlots = [
@@ -36,25 +73,136 @@ const timeSlots = [
   '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM',
 ];
 
-const TimeSlotPicker = ({ selectedDate, selectedTime, onSelect } : { selectedDate: string; selectedTime?: string | null; onSelect: (time: string) => void }) => {
+const DEFAULT_SERVICES: Service[] = [
+  { id: 'barangay-clearance', name: 'Barangay Clearance', fee: 100 },
+  { id: 'certificate-residency', name: 'Certificate of Residency', fee: 100 },
+  { id: 'certificate-indigency', name: 'Certificate of Indigency', fee: 0 },
+  { id: 'barangay-id', name: 'Barangay ID', fee: 150 },
+  { id: 'blotter-incident', name: 'Blotter / Incident Recording', fee: 0 },
+  { id: 'mediation-conciliation', name: 'Mediation / Conciliation', fee: 0 },
+  { id: 'health-consultation', name: 'Health Consultation (BHS)', fee: 0 },
+  { id: 'daycare-child-minding', name: 'Day Care / Child Minding', fee: 0 },
+  { id: 'business-permit-stall', name: 'Barangay Business Permit (Small Stalls)', fee: 500 },
+];
+
+const DISTRICT_TO_BARANGAYS: Record<string, string[]> = {
+  '1st': ['Agao', 'Datu Silongan', 'Humabon', 'Rajah Soliman'],
+  '2nd': ['Dagohoy', 'Golden Ribbon', 'Lapu-Lapu'],
+  '3rd': ['Holy Redeemer', 'Limaha', 'Tandang Sora'],
+  '4th': ['Ambago', 'Bayanihan', 'Doongan'],
+  '5th': ['Agusan Pequeño', 'Bading', 'Fort Poyohon'],
+  '6th': ['Bancasi', 'Libertad', 'Masao'],
+  '7th': ['Bonbon', 'Maon', 'San Vicente'],
+  '8th': ['Amparo', 'Bit-os', 'Bugabus'],
+  '9th': ['Bilay', 'Florida', 'Sumile'],
+  '10th': ['Buhangin', 'Camayahan', 'Tagabaca'],
+  '11th': ['Baan Km 3', 'Bobon', 'Mahogany'],
+  '12th': ['Ampayon', 'De Oro', 'Taligaman'],
+  '13th': ['Anticala', 'Los Angeles', 'Santo Niño'],
+};
+
+const baseFont = Platform.OS === 'ios' ? 'Helvetica Neue' : 'Roboto';
+
+// Firestore helper functions
+const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt'>) => {
+  try {
+    const docRef = await addDoc(collection(db, 'bookings'), {
+      ...bookingData,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    throw error;
+  }
+};
+
+const getBookingsForDate = async (date: string): Promise<Booking[]> => {
+  try {
+    const q = query(
+      collection(db, 'bookings'),
+      where('date', '==', date)
+    );
+    const querySnapshot = await getDocs(q);
+    const bookings: Booking[] = [];
+    querySnapshot.forEach((doc) => {
+      bookings.push({ id: doc.id, ...doc.data() } as Booking);
+    });
+    return bookings;
+  } catch (error) {
+    console.error('Error fetching bookings for date:', error);
+    return [];
+  }
+};
+
+const getMyBookings = async (userId: string): Promise<Booking[]> => {
+  try {
+    const q = query(
+      collection(db, 'bookings'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    const bookings: Booking[] = [];
+    querySnapshot.forEach((doc) => {
+      bookings.push({ id: doc.id, ...doc.data() } as Booking);
+    });
+    return bookings;
+  } catch (error) {
+    console.error('Error fetching user bookings:', error);
+    return [];
+  }
+};
+
+const TimeSlotPicker = ({ 
+  selectedDate, 
+  selectedTime, 
+  onSelect 
+}: { 
+  selectedDate: string; 
+  selectedTime?: string | null; 
+  onSelect: (time: string) => void 
+}) => {
   const [available, setAvailable] = useState<{ time: string; available: boolean }[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
+        setLoading(true);
         const bookings = await getBookingsForDate(selectedDate);
         const booked = bookings.map(b => b.time);
-        const slots = timeSlots.map(t => ({ time: t, available: !booked.includes(t) }));
-        if (mounted) setAvailable(slots);
+        const slots = timeSlots.map(t => ({ 
+          time: t, 
+          available: !booked.includes(t) 
+        }));
+        if (mounted) {
+          setAvailable(slots);
+        }
       } catch (e) {
-        // ignore; show all slots if fetch fails
+        console.error('Error checking time slots:', e);
         const slots = timeSlots.map(t => ({ time: t, available: true }));
-        if (mounted) setAvailable(slots);
+        if (mounted) {
+          setAvailable(slots);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     })();
     return () => { mounted = false; };
   }, [selectedDate]);
+
+  if (loading) {
+    return (
+      <View style={styles.slotContainer}>
+        <Title style={styles.slotTitle}>Select Time Slot</Title>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.slotContainer}>
@@ -89,22 +237,33 @@ export default function AppointmentsEnhancedScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   
-  // Form controllers (state)
+  // Form state
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   
-  // State variables
-  const [services, setServices] = useState<Service[]>([]);
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+  // Selection state
+  const [services] = useState<Service[]>(DEFAULT_SERVICES);
+  const [selectedService, setSelectedService] = useState<string | null>(DEFAULT_SERVICES[0].id);
+  const [district, setDistrict] = useState<string | null>(null);
+  const [barangay, setBarangay] = useState<string | null>(null);
+  
+  const districts = Object.keys(DISTRICT_TO_BARANGAYS);
+  const barangays = district ? DISTRICT_TO_BARANGAYS[district] : [];
+  
+  // Date and time state
   const [date, setDate] = useState(new Date(Date.now() + 24 * 60 * 60 * 1000)); // Tomorrow
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  
+  // Bookings state
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Document state
   const [picked, setPicked] = useState<{ uri: string; name: string } | null>(null);
   
   // Dialog states
@@ -112,47 +271,112 @@ export default function AppointmentsEnhancedScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [appointmentId, setAppointmentId] = useState('');
 
-  const canBookAppointment = selectedService && selectedTime && fullName.trim() && phone.trim() && email.trim() && address.trim();
+  const canBookAppointment = 
+    selectedService && 
+    selectedTime && 
+    fullName.trim() && 
+    phone.trim() && 
+    email.trim() && 
+    address.trim() && 
+    district && 
+    barangay;
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const s = await getServices();
-        if (mounted) {
-          setServices(s);
-          if (!selectedService && s.length) setSelectedService(s[0].id);
-        }
-
-        if (auth.currentUser) {
-          const b = await getMyBookings(auth.currentUser.uid);
-          if (mounted) setMyBookings(b);
-        }
-      } catch (e: any) {
-        Alert.alert('Error', e.message || 'Failed to load');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+    loadMyBookings();
   }, []);
 
-  const onChangeDate = (event: any, d?: Date) => {
+  const loadMyBookings = async () => {
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const bookings = await getMyBookings(auth.currentUser.uid);
+      setMyBookings(bookings);
+    } catch (error) {
+      console.error('Error loading bookings:', error);
+      Alert.alert('Error', 'Failed to load your bookings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDateDisplay = (d: Date) =>
+    d.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+  // Dynamic minimum date rules per service (e.g., health consultation can be same-day)
+  const minDate = selectedService === 'health-consultation'
+    ? new Date()
+    : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  const onChangeDate = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
-    if (d) {
-      setDate(d);
+    if (selectedDate) {
+      setDate(selectedDate);
       setSelectedTime(null);
     }
   };
 
-  const handleDocumentPicked = (uri: string, name: string) => setPicked({ uri, name });
+  const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  const formatDateForInput = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  const openDatePicker = () => {
+    console.log('Date picker opened on platform:', Platform.OS);
+    console.log('Current showDatePicker state:', showDatePicker);
+    
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: date,
+        onChange: onChangeDate,
+        mode: 'date',
+        minimumDate: minDate,
+      });
+    } else if (Platform.OS === 'web') {
+      // For web, always use the modal approach as it's more reliable
+      console.log('Opening web date picker modal');
+      setShowDatePicker(true);
+    } else {
+      // iOS and other platforms
+      setShowDatePicker(true);
+    }
+  };
+
+  const handleDocumentPicked = (uri: string, name: string) => {
+    setPicked({ uri, name });
+  };
 
   const showBookingConfirmation = () => {
     if (!canBookAppointment) {
-      Alert.alert('Error', 'Please fill in all required fields and select service, date, and time.');
+      Alert.alert('Incomplete Form', 'Please fill in all required fields and select service, date, and time.');
       return;
     }
+    
+    if (!auth.currentUser) {
+      Alert.alert('Authentication Required', 'Please sign in to book an appointment.');
+      return;
+    }
+    
     setShowConfirmation(true);
+  };
+
+  const resetForm = () => {
+    setFullName('');
+    setPhone('');
+    setEmail('');
+    setAddress('');
+    setNotes('');
+    setSelectedTime(null);
+    setPicked(null);
+    setDistrict(null);
+    setBarangay(null);
+    setDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
   };
 
   const handleSubmit = async () => {
@@ -160,42 +384,81 @@ export default function AppointmentsEnhancedScreen() {
     setIsSubmitting(true);
 
     try {
+      if (!auth.currentUser) {
+        throw new Error('User not authenticated');
+      }
+
+      // Upload attachment if provided
       let attachmentUrl: string | undefined;
-      if (picked && auth.currentUser) {
+      if (picked) {
         try {
-          const path = `booking_attachments/${auth.currentUser.uid}/${picked.name}`;
+          const timestamp = Date.now();
+          const fileName = `${timestamp}_${picked.name}`;
+          const path = `booking_attachments/${auth.currentUser.uid}/${fileName}`;
           attachmentUrl = await uploadFile(picked.uri, path);
-        } catch (e: any) {
-          Alert.alert('Upload failed', e.message || 'Failed to upload');
-          setIsSubmitting(false);
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError);
+          Alert.alert('Upload Failed', 'Failed to upload document. Continue without attachment?', [
+            { text: 'Cancel', style: 'cancel', onPress: () => setIsSubmitting(false) },
+            { text: 'Continue', onPress: () => submitBooking(undefined) }
+          ]);
           return;
         }
       }
 
-      if (auth.currentUser) {
-        await createBooking({
-          userId: auth.currentUser.uid,
-          serviceId: selectedService!,
-          date: date.toISOString().split('T')[0],
-          time: selectedTime!,
-          attachmentUrl,
-        });
+      await submitBooking(attachmentUrl);
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      Alert.alert('Booking Failed', error.message || 'Failed to create booking. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
 
-        const newAppointmentId = `APT-${Date.now()}`;
-        setAppointmentId(newAppointmentId);
-        setShowSuccess(true);
-
-        // Refresh bookings
-        const b = await getMyBookings(auth.currentUser.uid);
-        setMyBookings(b);
-        
-        // Reset form
-        setPicked(null);
-        setSelectedTime(null);
-        setNotes('');
+  const submitBooking = async (attachmentUrl?: string) => {
+    try {
+      if (!auth.currentUser) {
+        throw new Error('User not authenticated');
       }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to submit booking');
+
+      const selectedServiceData = services.find(s => s.id === selectedService);
+      if (!selectedServiceData) {
+        throw new Error('Invalid service selected');
+      }
+
+      const newAppointmentId = `APT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      const bookingData: Omit<Booking, 'id' | 'createdAt'> = {
+        userId: auth.currentUser.uid,
+        serviceId: selectedService!,
+        serviceName: selectedServiceData.name,
+        date: date.toISOString().split('T')[0],
+        time: selectedTime!,
+        status: 'pending',
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        address: address.trim(),
+        district: district!,
+        barangay: barangay!,
+        notes: notes.trim(),
+        fee: selectedServiceData.fee,
+        appointmentId: newAppointmentId,
+        ...(attachmentUrl && { attachmentUrl })
+      };
+
+      await createBooking(bookingData);
+      
+      setAppointmentId(newAppointmentId);
+      setShowSuccess(true);
+      
+      // Reload bookings
+      await loadMyBookings();
+      
+      // Reset form
+      resetForm();
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -211,20 +474,30 @@ export default function AppointmentsEnhancedScreen() {
     </View>
   );
 
-  if (loading) return (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" color={colors.tint} />
-      <Text style={[styles.loadingText, { color: colors.text }]}>Loading services...</Text>
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.tint} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>Loading appointments...</Text>
+      </View>
+    );
+  }
 
   const selectedServiceData = services.find(s => s.id === selectedService);
+  
+  // Group bookings by barangay
+  const groupedByBarangay: Record<string, Booking[]> = myBookings.reduce((acc: Record<string, Booking[]>, curr: Booking) => {
+    const key = curr.barangay || 'Unspecified Barangay';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(curr);
+    return acc;
+  }, {});
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
-        <View style={[styles.headerSection, { backgroundColor: colors.tint }]}>
+        <View style={[styles.headerSection, { backgroundColor: '#007AFF' }]}>
           <View style={styles.headerContent}>
             <IconSymbol name="event" size={32} color="#fff" />
             <View style={styles.headerText}>
@@ -256,27 +529,133 @@ export default function AppointmentsEnhancedScreen() {
           </Card.Content>
         </Card>
 
+        {/* District and Barangay Selection */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Title style={[styles.sectionTitle, { color: colors.text }]}>Barangay Location</Title>
+            <View style={styles.inputRow}>
+              <View style={[styles.inputHalf, styles.pickerContainer]}>
+                <Picker
+                  selectedValue={district}
+                  onValueChange={(val) => { 
+                    setDistrict(val); 
+                    setBarangay(null); 
+                  }}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select District" value={null} />
+                  {districts.map(d => (
+                    <Picker.Item key={d} label={`${d} District`} value={d} />
+                  ))}
+                </Picker>
+              </View>
+              <View style={[styles.inputHalf, styles.pickerContainer]}>
+                <Picker
+                  enabled={!!district}
+                  selectedValue={barangay}
+                  onValueChange={setBarangay}
+                  style={styles.picker}
+                >
+                  <Picker.Item 
+                    label={district ? 'Select Barangay' : 'Choose District first'} 
+                    value={null} 
+                  />
+                  {barangays.map(b => (
+                    <Picker.Item key={b} label={b} value={b} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+
         {/* Date Selection */}
         <Card style={styles.card}>
           <Card.Content>
-            <Title style={[styles.sectionTitle, { color: colors.text }]}>Select Date</Title>
             <TouchableOpacity 
-              style={[styles.dateButton, { borderColor: colors.icon }]}
-              onPress={() => setShowDatePicker(true)}
+              onPress={openDatePicker} 
+              activeOpacity={0.7}
+              style={styles.clickableTitle}
             >
-              <IconSymbol name="calendar" size={20} color={colors.icon} />
+              <Title style={[styles.sectionTitle, { color: colors.text }]}>
+                Select Date
+              </Title>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.dateButton, { 
+                borderColor: '#007AFF',
+                backgroundColor: colors.background === '#000' ? '#1a1a1a' : '#fff'
+              }]}
+              onPress={openDatePicker}
+              activeOpacity={0.7}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              accessible={true}
+              accessibilityLabel="Select appointment date"
+              accessibilityRole="button"
+            >
+              <IconSymbol name="calendar" size={20} color="#007AFF" />
               <Text style={[styles.dateText, { color: colors.text }]}>
-                {date.toLocaleDateString()}
+                {formatDateDisplay(date)}
               </Text>
+              <IconSymbol name="chevron-right" size={20} color="#007AFF" />
             </TouchableOpacity>
             {showDatePicker && (
-              <DateTimePicker 
-                value={date} 
-                mode="date" 
-                display="default" 
-                onChange={onChangeDate} 
-                minimumDate={new Date()} 
-              />
+              <>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDatePickerContainer}>
+                    <Text style={[styles.webDatePickerTitle, { color: colors.text }]}>
+                      Select Date
+                    </Text>
+                    <View style={styles.webDateInputRow}>
+                      <TextInput
+                        style={[styles.webDateInput, { 
+                          borderColor: colors.icon, 
+                          color: colors.text,
+                          backgroundColor: colors.background === '#000' ? '#1a1a1a' : '#fff'
+                        }]}
+                        value={formatDateForInput(date)}
+                        onChangeText={(text) => {
+                          if (text) {
+                            const newDate = new Date(text);
+                            if (!isNaN(newDate.getTime()) && newDate >= minDate) {
+                              setDate(newDate);
+                            }
+                          }
+                        }}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor={colors.icon}
+                        keyboardType="numeric"
+                      />
+                      <Text style={[styles.webDateHint, { color: colors.icon }]}>
+                        Format: YYYY-MM-DD
+                      </Text>
+                    </View>
+                    <View style={styles.webDatePickerButtons}>
+                      <TouchableOpacity 
+                        style={[styles.webDateButton, { borderColor: '#007AFF', backgroundColor: 'transparent' }]}
+                        onPress={() => setShowDatePicker(false)}
+                      >
+                        <Text style={[styles.webDateButtonText, { color: '#007AFF' }]}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.webDateButton, { backgroundColor: '#007AFF', borderColor: '#007AFF' }]}
+                        onPress={() => setShowDatePicker(false)}
+                      >
+                        <Text style={styles.webDateButtonTextActive}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <DateTimePicker 
+                    value={date} 
+                    mode="date" 
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onChangeDate} 
+                    minimumDate={minDate}
+                    textColor={colors.text}
+                  />
+                )}
+              </>
             )}
           </Card.Content>
         </Card>
@@ -300,7 +679,7 @@ export default function AppointmentsEnhancedScreen() {
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Full Name *</Text>
               <TextInput
-                style={[styles.textInput, { borderColor: colors.icon, color: colors.text }]}
+                style={[styles.textInput, { borderColor: colors.icon }]}
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="Enter your full name"
@@ -311,7 +690,7 @@ export default function AppointmentsEnhancedScreen() {
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Phone Number *</Text>
               <TextInput
-                style={[styles.textInput, { borderColor: colors.icon, color: colors.text }]}
+                style={[styles.textInput, { borderColor: colors.icon }]}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Enter your phone number"
@@ -323,7 +702,7 @@ export default function AppointmentsEnhancedScreen() {
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Email Address *</Text>
               <TextInput
-                style={[styles.textInput, { borderColor: colors.icon, color: colors.text }]}
+                style={[styles.textInput, { borderColor: colors.icon }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Enter your email"
@@ -336,10 +715,10 @@ export default function AppointmentsEnhancedScreen() {
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Address *</Text>
               <TextInput
-                style={[styles.textInput, { borderColor: colors.icon, color: colors.text }]}
+                style={[styles.textInput, { borderColor: colors.icon }]}
                 value={address}
                 onChangeText={setAddress}
-                placeholder="Enter your address"
+                placeholder="Enter your complete address"
                 placeholderTextColor={colors.icon}
                 multiline
                 numberOfLines={2}
@@ -348,12 +727,12 @@ export default function AppointmentsEnhancedScreen() {
           </Card.Content>
         </Card>
 
-        {/* Notes */}
+        {/* Additional Notes */}
         <Card style={styles.card}>
           <Card.Content>
             <Title style={[styles.sectionTitle, { color: colors.text }]}>Additional Notes</Title>
             <TextInput
-              style={[styles.textInput, styles.notesInput, { borderColor: colors.icon, color: colors.text }]}
+              style={[styles.textInput, styles.notesInput, { borderColor: colors.icon }]}
               value={notes}
               onChangeText={setNotes}
               placeholder="Any additional information or special requests..."
@@ -367,12 +746,17 @@ export default function AppointmentsEnhancedScreen() {
         {/* Document Upload */}
         <Card style={styles.card}>
           <Card.Content>
-            <Title style={[styles.sectionTitle, { color: colors.text }]}>Upload Documents</Title>
+            <Title style={[styles.sectionTitle, { color: colors.text }]}>Upload Documents (Optional)</Title>
             <DocumentPicker onDocumentPicked={handleDocumentPicked} />
             {picked && (
-              <Text style={[styles.pickedText, { color: colors.icon }]}>
-                Selected: {picked.name}
-              </Text>
+              <View style={styles.pickedContainer}>
+                <Text style={[styles.pickedText, { color: colors.icon }]}>
+                  Selected: {picked.name}
+                </Text>
+                <TouchableOpacity onPress={() => setPicked(null)}>
+                  <Text style={[styles.removeText, { color: colors.tint }]}>Remove</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </Card.Content>
         </Card>
@@ -382,8 +766,8 @@ export default function AppointmentsEnhancedScreen() {
           style={[
             styles.bookButton,
             { 
-              backgroundColor: canBookAppointment ? colors.tint : colors.icon + '30',
-              opacity: canBookAppointment ? 1 : 0.6
+              backgroundColor: canBookAppointment ? '#007AFF' : colors.icon + '30',
+              opacity: canBookAppointment && !isSubmitting ? 1 : 0.6
             }
           ]}
           onPress={showBookingConfirmation}
@@ -405,29 +789,94 @@ export default function AppointmentsEnhancedScreen() {
         {/* My Bookings Section */}
         <Title style={[styles.sectionTitle, { marginTop: 24, color: colors.text }]}>My Bookings</Title>
         {myBookings.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.icon }]}>No bookings found.</Text>
+          <Card style={styles.emptyCard}>
+            <Card.Content>
+              <Text style={[styles.emptyText, { color: colors.icon }]}>
+                No bookings found. Book your first appointment above!
+              </Text>
+            </Card.Content>
+          </Card>
         ) : (
-          myBookings.map(b => (
-            <Card key={b.id} style={styles.bookingCard}>
-              <Card.Content>
-                <Text style={[styles.bookingText, { color: colors.text }]}>
-                  Service: {services.find(s => s.id === b.serviceId)?.name}
-                </Text>
-                <Text style={[styles.bookingText, { color: colors.text }]}>Date: {b.date}</Text>
-                <Text style={[styles.bookingText, { color: colors.text }]}>Time: {b.time}</Text>
-                <Text style={[
-                  styles.bookingText, 
-                  { color: b.status === 'approved' ? '#28a745' : b.status === 'rejected' ? '#dc3545' : '#ffa500' }
-                ]}>
-                  Status: {b.status.toUpperCase()}
-                </Text>
-                {b.attachmentUrl && (
-                  <TouchableOpacity onPress={() => Linking.openURL(b.attachmentUrl!)}>
-                    <Text style={[styles.linkText, { color: colors.tint }]}>View Document</Text>
-                  </TouchableOpacity>
-                )}
-              </Card.Content>
-            </Card>
+          Object.entries(groupedByBarangay).map(([barangayName, bookings]) => (
+            <View key={barangayName}>
+              <Text style={[styles.groupHeader, { color: colors.text }]}>
+                📍 {barangayName}
+              </Text>
+              {bookings.map((booking) => (
+                <Card key={booking.id || booking.appointmentId} style={styles.bookingCard}>
+                  <Card.Content>
+                    <View style={styles.bookingHeader}>
+                      <Text style={[styles.bookingId, { color: colors.tint }]}>
+                        {booking.appointmentId || `#${booking.id}`}
+                      </Text>
+                      <View style={[
+                        styles.statusBadge,
+                        { 
+                          backgroundColor: 
+                            booking.status === 'approved' ? '#28a74520' : 
+                            booking.status === 'rejected' ? '#dc354520' : 
+                            '#ffa50020'
+                        }
+                      ]}>
+                        <Text style={[
+                          styles.statusText,
+                          { 
+                            color: 
+                              booking.status === 'approved' ? '#28a745' : 
+                              booking.status === 'rejected' ? '#dc3545' : 
+                              '#ffa500'
+                          }
+                        ]}>
+                          {booking.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.bookingDetails}>
+                      <View style={styles.bookingRow}>
+                        <IconSymbol name="business" size={16} color={colors.icon} />
+                        <Text style={[styles.bookingText, { color: colors.text }]}>
+                          {booking.serviceName || 'Service'}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.bookingRow}>
+                        <IconSymbol name="calendar" size={16} color={colors.icon} />
+                        <Text style={[styles.bookingText, { color: colors.text }]}>
+                          {new Date(booking.date).toLocaleDateString()} at {booking.time}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.bookingRow}>
+                        <IconSymbol name="location-on" size={16} color={colors.icon} />
+                        <Text style={[styles.bookingText, { color: colors.text }]}>
+                          {booking.district} District
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.bookingRow}>
+                        <IconSymbol name="attach-money" size={16} color={colors.icon} />
+                        <Text style={[styles.bookingText, { color: colors.text }]}>
+                          Fee: ₱{booking.fee}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    {booking.attachmentUrl && (
+                      <TouchableOpacity 
+                        style={styles.attachmentButton}
+                        onPress={() => Linking.openURL(booking.attachmentUrl!)}
+                      >
+                        <IconSymbol name="attachment" size={16} color={colors.tint} />
+                        <Text style={[styles.linkText, { color: colors.tint }]}>
+                          View Attached Document
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </Card.Content>
+                </Card>
+              ))}
+            </View>
           ))
         )}
       </ScrollView>
@@ -437,14 +886,19 @@ export default function AppointmentsEnhancedScreen() {
         <Dialog visible={showConfirmation} onDismiss={() => setShowConfirmation(false)}>
           <Dialog.Title style={styles.dialogTitle}>
             <IconSymbol name="event" size={24} color={colors.tint} />
-            <Text style={[styles.dialogTitleText, { color: colors.text }]}>Confirm Appointment</Text>
+            <Text style={[styles.dialogTitleText, { color: colors.text }]}>
+              Confirm Appointment
+            </Text>
           </Dialog.Title>
           <Dialog.ScrollArea>
             <View style={styles.dialogContent}>
               {buildConfirmationItem('Service', selectedServiceData?.name || '', 'business')}
               {buildConfirmationItem('Date', date.toLocaleDateString(), 'calendar')}
               {buildConfirmationItem('Time', selectedTime || '', 'access-time')}
+              {buildConfirmationItem('Location', `${barangay}, ${district} District`, 'location-on')}
               {buildConfirmationItem('Fee', `₱${selectedServiceData?.fee || 0}`, 'attach-money')}
+              {buildConfirmationItem('Name', fullName, 'person')}
+              {buildConfirmationItem('Contact', phone, 'phone')}
               
               <View style={[styles.reminderBox, { backgroundColor: colors.tint + '10', borderColor: colors.tint + '30' }]}>
                 <View style={styles.reminderHeader}>
@@ -461,8 +915,17 @@ export default function AppointmentsEnhancedScreen() {
             </View>
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setShowConfirmation(false)}>Cancel</Button>
-            <Button mode="contained" onPress={handleSubmit}>Confirm Booking</Button>
+            <Button onPress={() => setShowConfirmation(false)} textColor={colors.text}>
+              Cancel
+            </Button>
+            <Button 
+              mode="contained" 
+              onPress={handleSubmit}
+              loading={isSubmitting}
+              disabled={isSubmitting}
+            >
+              Confirm Booking
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -474,20 +937,30 @@ export default function AppointmentsEnhancedScreen() {
             <View style={[styles.successIcon, { backgroundColor: colors.tint + '20' }]}>
               <IconSymbol name="check-circle" size={48} color={colors.tint} />
             </View>
-            <Text style={[styles.successTitle, { color: colors.tint }]}>Appointment Booked!</Text>
+            <Text style={[styles.successTitle, { color: colors.tint }]}>
+              Appointment Booked Successfully!
+            </Text>
             <Text style={[styles.successMessage, { color: colors.text }]}>
-              Your appointment has been successfully scheduled.
+              Your appointment has been scheduled and is pending approval.
             </Text>
             <View style={[styles.appointmentIdBox, { backgroundColor: colors.background, borderColor: colors.icon + '30' }]}>
-              <Text style={[styles.appointmentIdLabel, { color: colors.icon }]}>Appointment ID</Text>
-              <Text style={[styles.appointmentId, { color: colors.tint }]}>{appointmentId}</Text>
+              <Text style={[styles.appointmentIdLabel, { color: colors.icon }]}>
+                Appointment ID
+              </Text>
+              <Text style={[styles.appointmentId, { color: colors.tint }]}>
+                {appointmentId}
+              </Text>
             </View>
             <Text style={[styles.notificationText, { color: colors.icon }]}>
-              You will receive a confirmation notification shortly.
+              You will receive a confirmation notification once your appointment is approved.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button mode="contained" onPress={() => setShowSuccess(false)} style={styles.doneButton}>
+            <Button 
+              mode="contained" 
+              onPress={() => setShowSuccess(false)} 
+              style={styles.doneButton}
+            >
               Done
             </Button>
           </Dialog.Actions>
@@ -526,6 +999,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     padding: 16,
+    elevation: 4,
   },
   headerContent: {
     flexDirection: 'row',
@@ -536,15 +1010,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#fff',
     marginBottom: 4,
+    letterSpacing: 0.3,
+    fontFamily: baseFont,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#fff',
     opacity: 0.9,
+    fontFamily: baseFont,
   },
   
   // Cards
@@ -556,6 +1033,11 @@ const styles = StyleSheet.create({
   bookingCard: { 
     marginBottom: 12,
     borderRadius: 8,
+    elevation: 2,
+  },
+  emptyCard: {
+    marginTop: 8,
+    borderRadius: 8,
   },
   
   // Section Titles
@@ -564,28 +1046,137 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
     marginBottom: 12 
   },
+  clickableTitle: {
+    marginBottom: 8,
+  },
   
   // Picker
   pickerContainer: {
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    backgroundColor: '#fff',
   },
   picker: { 
     height: 50, 
   },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inputHalf: {
+    flex: 1,
+  },
   
   // Date Selection
+  dateSelectionContainer: {
+    marginTop: 8,
+  },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-    marginTop: 8,
+    padding: 16,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    minHeight: 56,
+    justifyContent: 'space-between',
+  },
+  dateInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    fontFamily: baseFont,
+    marginBottom: 4,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  dateValue: {
+    fontSize: 16,
+    color: '#2c2c2c',
+    fontWeight: '600',
+    fontFamily: baseFont,
+    letterSpacing: 0.2,
+  },
+  dateNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  dateNoteText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 6,
+    fontFamily: baseFont,
+    fontStyle: 'italic',
   },
   dateText: {
     marginLeft: 8,
     fontSize: 16,
+    flex: 1,
   },
+  webDatePickerContainer: {
+    marginTop: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderRadius: 12,
+    borderColor: '#ddd',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  webDatePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  webDateInputRow: {
+    marginBottom: 20,
+  },
+  webDateInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  webDateHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  webDatePickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  webDateButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  webDateButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  webDateButtonTextActive: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
   
   // Time Slots
   slotContainer: { 
@@ -606,7 +1197,7 @@ const styles = StyleSheet.create({
     padding: 12, 
     marginBottom: 8, 
     borderWidth: 1, 
-    borderColor: '#007bff', 
+    borderColor: '#007AFF', 
     borderRadius: 8, 
     alignItems: 'center', 
     backgroundColor: '#fff' 
@@ -616,18 +1207,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0' 
   },
   slotSelected: { 
-    backgroundColor: '#007bff' 
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   slotText: { 
     fontSize: 12, 
-    color: '#007bff',
+    color: '#007AFF',
     fontWeight: '500',
+    fontFamily: baseFont,
   },
   slotTextDisabled: { 
-    color: '#999' 
+    color: '#999',
+    fontFamily: baseFont,
   },
   slotTextSelected: { 
-    color: '#fff' 
+    color: '#fff',
+    fontWeight: '600',
+    fontFamily: baseFont,
   },
   
   // Form Inputs
@@ -638,16 +1234,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 6,
+    fontFamily: baseFont,
   },
   textInput: {
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: 'transparent',
+    backgroundColor: '#fff',
+    color: '#000',
+    fontFamily: baseFont,
   },
   notesInput: {
-    height: 80,
+    height: 100,
     textAlignVertical: 'top',
   },
   
@@ -669,6 +1268,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
+    fontFamily: baseFont,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -676,26 +1276,83 @@ const styles = StyleSheet.create({
   },
   
   // Document Upload
+  pickedContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+  },
   pickedText: { 
-    marginTop: 8, 
-    fontStyle: 'italic', 
+    flex: 1,
     fontSize: 14,
+  },
+  removeText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   
   // Bookings List
   emptyText: { 
     textAlign: 'center', 
-    marginTop: 12,
     fontSize: 16,
+    lineHeight: 24,
+    fontFamily: baseFont,
+  },
+  groupHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 8,
+    fontFamily: baseFont,
+  },
+  bookingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  bookingId: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: baseFont,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  bookingDetails: {
+    gap: 8,
+  },
+  bookingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   bookingText: {
     fontSize: 14,
-    marginBottom: 4,
+    flex: 1,
+    fontFamily: baseFont,
+  },
+  attachmentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
   linkText: { 
-    color: '#007bff', 
+    fontSize: 14,
     textDecorationLine: 'underline',
-    marginTop: 4,
   },
   
   // Confirmation Dialog
@@ -773,6 +1430,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 16,
+    lineHeight: 22,
   },
   appointmentIdBox: {
     width: '100%',
@@ -793,6 +1451,7 @@ const styles = StyleSheet.create({
   notificationText: {
     fontSize: 12,
     textAlign: 'center',
+    lineHeight: 18,
   },
   doneButton: {
     width: '100%',

@@ -51,13 +51,6 @@ interface RecentActivity {
   type: string;
 }
 
-interface WeatherData {
-  temperature: number;
-  condition: string;
-  humidity: number;
-  windSpeed: number;
-  location: string;
-}
 
 export default function HomeDashboard() {
   const colorScheme = useColorScheme();
@@ -73,6 +66,7 @@ export default function HomeDashboard() {
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showServiceMenu, setShowServiceMenu] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceShortcut | null>(null);
+  const [activeTab, setActiveTab] = useState(0); // 0 for Dashboard, 1 for Community Announcements
 
   // Mock data (matching Flutter implementation)
   const serviceShortcuts: ServiceShortcut[] = [
@@ -175,14 +169,6 @@ export default function HomeDashboard() {
     },
   ];
 
-  const weatherData: WeatherData = {
-    temperature: 28,
-    condition: "partly_cloudy",
-    humidity: 65,
-    windSpeed: 12,
-    location: "San Jose",
-  };
-
   useEffect(() => {
     const loadAnnouncements = async () => {
       try {
@@ -221,8 +207,8 @@ export default function HomeDashboard() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
+    if (hour >= 8 && hour < 12) return 'Morning';
+    if (hour <= 17 && hour >= 12) return 'Afternoon';
     return 'Evening';
   };
 
@@ -236,18 +222,16 @@ export default function HomeDashboard() {
     }
   };
 
-  const getWeatherIcon = (condition: string) => {
-    switch (condition) {
-      case 'sunny': return 'wb-sunny';
-      case 'partly_cloudy': return 'wb-cloudy';
-      case 'cloudy': return 'cloud';
-      case 'rainy': return 'grain';
-      default: return 'wb-sunny';
-    }
-  };
-
   const callEmergencyContact = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
+  };
+
+  const getPriorityColor = (priority?: string) => {
+    switch (priority) {
+      case 'high': return '#dc3545';
+      case 'medium': return '#ffa500';
+      default: return '#28a745';
+    }
   };
 
   if (loading) {
@@ -260,225 +244,281 @@ export default function HomeDashboard() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header Section */}
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity style={styles.profileContainer}>
+            <View style={[styles.profileImage, { borderColor: colors.tint }]}>
+              <IconSymbol name="person" size={24} color={colors.icon} />
+            </View>
+          </TouchableOpacity>
+          
+          <View style={styles.greetingContainer}>
+            <Text style={[styles.greeting, { color: colors.icon }]}>
+              Good {getGreeting()}!
+            </Text>
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {user?.displayName || 'User'}
+            </Text>
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.headerButton, { backgroundColor: colors.background }]}
+            onPress={() => setShowSearchDialog(true)}
+          >
+            <IconSymbol name="search" size={20} color={colors.icon} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.headerButton, { backgroundColor: colors.background }]}
+            onPress={() => Alert.alert('Notifications', 'Notifications feature coming soon')}
+          >
+            <IconSymbol name="notifications" size={20} color={colors.icon} />
+            {notificationCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: '#dc3545' }]}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Tab Navigation */}
+      <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 0 && styles.activeTab]}
+          onPress={() => setActiveTab(0)}
+        >
+          <IconSymbol name="dashboard" size={20} color={activeTab === 0 ? colors.tint : colors.icon} />
+          <Text style={[styles.tabText, { color: activeTab === 0 ? colors.tint : colors.icon }]}>Dashboard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 1 && styles.activeTab]}
+          onPress={() => setActiveTab(1)}
+        >
+          <IconSymbol name="campaign" size={20} color={activeTab === 1 ? colors.tint : colors.icon} />
+          <Text style={[styles.tabText, { color: activeTab === 1 ? colors.tint : colors.icon }]}>Announcements</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Header Section */}
-        <View style={[styles.header, { backgroundColor: colors.background }]}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity style={styles.profileContainer}>
-              <View style={[styles.profileImage, { borderColor: colors.tint }]}>
-                <IconSymbol name="person" size={24} color={colors.icon} />
-              </View>
-            </TouchableOpacity>
-            
-            <View style={styles.greetingContainer}>
-              <Text style={[styles.greeting, { color: colors.icon }]}>
-                Good {getGreeting()}!
-              </Text>
-              <Text style={[styles.userName, { color: colors.text }]}>
-                {user?.displayName || 'User'}
-              </Text>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.background }]}
-              onPress={() => setShowSearchDialog(true)}
-            >
-              <IconSymbol name="search" size={20} color={colors.icon} />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.background }]}
-              onPress={() => Alert.alert('Notifications', 'Notifications feature coming soon')}
-            >
-              <IconSymbol name="notifications" size={20} color={colors.icon} />
-              {notificationCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: '#dc3545' }]}>
-                  <Text style={styles.badgeText}>
-                    {notificationCount > 9 ? '9+' : notificationCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Weather Widget */}
-        <Card style={[styles.weatherCard, { backgroundColor: colors.background }]}>
-          <Card.Content style={styles.weatherContent}>
-            <View style={styles.weatherInfo}>
-              <IconSymbol name={getWeatherIcon(weatherData.condition)} size={32} color={colors.tint} />
-              <View style={styles.weatherDetails}>
-                <Text style={[styles.temperature, { color: colors.text }]}>
-                  {weatherData.temperature}°C
-                </Text>
-                <Text style={[styles.location, { color: colors.icon }]}>
-                  {weatherData.location}
-                </Text>
+        {activeTab === 0 ? (
+          // Dashboard Tab
+          <>
+            {/* Quick Services Grid */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Services</Text>
+              <View style={styles.servicesGrid}>
+                {serviceShortcuts.map((service) => (
+                  <TouchableOpacity
+                    key={service.id}
+                    style={[styles.serviceCard, { backgroundColor: colors.background }]}
+                    onPress={() => Alert.alert('Service', `Navigate to ${service.title}`)}
+                    onLongPress={() => {
+                      setSelectedService(service);
+                      setShowServiceMenu(true);
+                    }}
+                  >
+                    <IconSymbol name={service.icon} size={32} color={colors.tint} />
+                    <Text style={[styles.serviceTitle, { color: colors.text }]}>
+                      {service.title}
+                    </Text>
+                    <Text style={[styles.serviceSubtitle, { color: colors.icon }]}>
+                      {service.subtitle}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
-            <View style={styles.weatherStats}>
-              <Text style={[styles.weatherStat, { color: colors.icon }]}>
-                Humidity: {weatherData.humidity}%
-              </Text>
-              <Text style={[styles.weatherStat, { color: colors.icon }]}>
-                Wind: {weatherData.windSpeed} km/h
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
 
-        {/* Quick Services Grid */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Services</Text>
-          <View style={styles.servicesGrid}>
-            {serviceShortcuts.map((service) => (
-              <TouchableOpacity
-                key={service.id}
-                style={[styles.serviceCard, { backgroundColor: colors.background }]}
-                onPress={() => Alert.alert('Service', `Navigate to ${service.title}`)}
-                onLongPress={() => {
-                  setSelectedService(service);
-                  setShowServiceMenu(true);
-                }}
-              >
-                <IconSymbol name={service.icon} size={32} color={colors.tint} />
-                <Text style={[styles.serviceTitle, { color: colors.text }]}>
-                  {service.title}
-                </Text>
-                <Text style={[styles.serviceSubtitle, { color: colors.icon }]}>
-                  {service.subtitle}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
-          {quickActions.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={[styles.actionCard, { backgroundColor: colors.background }]}
-              onPress={() => Alert.alert('Action', `Navigate to ${action.title}`)}
-            >
-              <View style={styles.actionContent}>
-                <IconSymbol name={action.icon} size={24} color={colors.tint} />
-                <View style={styles.actionText}>
-                  <Text style={[styles.actionTitle, { color: colors.text }]}>
-                    {action.title}
-                  </Text>
-                  <Text style={[styles.actionDescription, { color: colors.icon }]}>
-                    {action.description}
-                  </Text>
-                </View>
-                <IconSymbol name="chevron-right" size={20} color={colors.icon} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Emergency Contacts */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Emergency Contacts</Text>
-          <View style={styles.emergencyGrid}>
-            {emergencyContacts.map((contact) => (
-              <TouchableOpacity
-                key={contact.id}
-                style={[styles.emergencyCard, { backgroundColor: colors.background }]}
-                onPress={() => callEmergencyContact(contact.phone)}
-              >
-                <IconSymbol name={contact.icon} size={24} color={colors.tint} />
-                <Text style={[styles.emergencyName, { color: colors.text }]}>
-                  {contact.name}
-                </Text>
-                <Text style={[styles.emergencyPhone, { color: colors.icon }]}>
-                  {contact.phone}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
-          {recentActivities.map((activity) => (
-            <View key={activity.id} style={[styles.activityCard, { backgroundColor: colors.background }]}>
-              <View style={styles.activityContent}>
-                <View style={styles.activityInfo}>
-                  <Text style={[styles.activityTitle, { color: colors.text }]}>
-                    {activity.title}
-                  </Text>
-                  <Text style={[styles.activityDate, { color: colors.icon }]}>
-                    {new Date(activity.date).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activity.status) }]}>
-                  <Text style={styles.statusText}>
-                    {activity.status.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Community Announcements */}
-        <View style={styles.section}>
-          <View style={styles.announcementHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Community Announcements
-            </Text>
-            <TouchableOpacity onPress={() => Alert.alert('View All', 'View all announcements')}>
-              <Text style={[styles.viewAllText, { color: colors.tint }]}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          
-      {announcements.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.icon }]}>
-              No announcements posted yet.
-            </Text>
-          ) : (
-            announcements.map((announcement) => (
-              <Card key={announcement.id} style={[styles.announcementCard, { backgroundColor: colors.background }]}>
-              <Card.Content>
-                  <View style={styles.announcementHeader}>
-                    <Title style={[styles.announcementTitle, { color: colors.text }]}>
-                      {announcement.title}
-                    </Title>
-                    <TouchableOpacity onPress={() => toggleBookmark(announcement.id!)}>
-                      <IconSymbol 
-                        name={announcement.isBookmarked ? "bookmark" : "bookmark-border"} 
-                        size={20} 
-                        color={colors.tint} 
-                      />
-                    </TouchableOpacity>
+            {/* Quick Actions */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+              {quickActions.map((action) => (
+                <TouchableOpacity
+                  key={action.id}
+                  style={[styles.actionCard, { backgroundColor: colors.background }]}
+                  onPress={() => Alert.alert('Action', `Navigate to ${action.title}`)}
+                >
+                  <View style={styles.actionContent}>
+                    <IconSymbol name={action.icon} size={24} color={colors.tint} />
+                    <View style={styles.actionText}>
+                      <Text style={[styles.actionTitle, { color: colors.text }]}>
+                        {action.title}
+                      </Text>
+                      <Text style={[styles.actionDescription, { color: colors.icon }]}>
+                        {action.description}
+                      </Text>
+                    </View>
+                    <IconSymbol name="chevron-right" size={20} color={colors.icon} />
                   </View>
-                  <Paragraph style={[styles.announcementContent, { color: colors.text }]}>
-                    {announcement.content}
-                  </Paragraph>
-                  <Text style={[styles.announcementDate, { color: colors.icon }]}>
-                    Posted by: {announcement.postedBy} on {new Date(announcement.date).toLocaleDateString()}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Emergency Contacts */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Emergency Contacts</Text>
+              <View style={styles.emergencyGrid}>
+                {emergencyContacts.map((contact) => (
+                  <TouchableOpacity
+                    key={contact.id}
+                    style={[styles.emergencyCard, { backgroundColor: colors.background }]}
+                    onPress={() => callEmergencyContact(contact.phone)}
+                  >
+                    <IconSymbol name={contact.icon} size={24} color={colors.tint} />
+                    <Text style={[styles.emergencyName, { color: colors.text }]}>
+                      {contact.name}
+                    </Text>
+                    <Text style={[styles.emergencyPhone, { color: colors.icon }]}>
+                      {contact.phone}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Recent Activity */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
+              {recentActivities.map((activity) => (
+                <View key={activity.id} style={[styles.activityCard, { backgroundColor: colors.background }]}>
+                  <View style={styles.activityContent}>
+                    <View style={styles.activityInfo}>
+                      <Text style={[styles.activityTitle, { color: colors.text }]}>
+                        {activity.title}
+                      </Text>
+                      <Text style={[styles.activityDate, { color: colors.icon }]}>
+                        {new Date(activity.date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activity.status) }]}>
+                      <Text style={styles.statusText}>
+                        {activity.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          // Community Announcements Tab
+          <View style={styles.announcementsContainer}>
+            {/* Filter and Sort Options */}
+            <View style={styles.filterContainer}>
+              <TouchableOpacity style={[styles.filterButton, { borderColor: colors.tint }]}>
+                <IconSymbol name="filter-list" size={18} color={colors.tint} />
+                <Text style={[styles.filterText, { color: colors.tint }]}>Filter</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.filterButton, { borderColor: colors.tint }]}>
+                <IconSymbol name="sort" size={18} color={colors.tint} />
+                <Text style={[styles.filterText, { color: colors.tint }]}>Sort</Text>
+              </TouchableOpacity>
+            </View>
+
+            {announcements.length === 0 ? (
+              <Card style={[styles.emptyCard, { backgroundColor: colors.background }]}>
+                <Card.Content style={styles.emptyContent}>
+                  <IconSymbol name="campaign" size={48} color={colors.icon} />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    No Announcements Yet
                   </Text>
-              </Card.Content>
-            </Card>
-            ))
-          )}
-        </View>
+                  <Text style={[styles.emptyDescription, { color: colors.icon }]}>
+                    Community announcements will appear here when posted by barangay officials
+                  </Text>
+                </Card.Content>
+              </Card>
+            ) : (
+              announcements.map((announcement) => (
+                <Card key={announcement.id} style={[styles.announcementCard, { backgroundColor: colors.background }]}>
+                  <Card.Content>
+                    <View style={styles.announcementHeader}>
+                      <View style={styles.announcementTitleRow}>
+                        {announcement.priority && (
+                          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(announcement.priority) + '20' }]}>
+                            <Text style={[styles.priorityText, { color: getPriorityColor(announcement.priority) }]}>
+                              {announcement.priority.toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <TouchableOpacity onPress={() => toggleBookmark(announcement.id!)}>
+                          <IconSymbol 
+                            name={announcement.isBookmarked ? "bookmark" : "bookmark-border"} 
+                            size={22} 
+                            color={colors.tint} 
+                          />
+                        </TouchableOpacity>
+                      </View>
+                      <Title style={[styles.announcementTitle, { color: colors.text }]}>
+                        {announcement.title}
+                      </Title>
+                    </View>
+                    
+                    {announcement.category && (
+                      <View style={[styles.categoryBadge, { backgroundColor: colors.tint + '15' }]}>
+                        <Text style={[styles.categoryText, { color: colors.tint }]}>
+                          {announcement.category}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <Paragraph style={[styles.announcementContent, { color: colors.text }]}>
+                      {announcement.content}
+                    </Paragraph>
+                    
+                    <View style={styles.announcementFooter}>
+                      <View style={styles.announcementMeta}>
+                        <IconSymbol name="person" size={14} color={colors.icon} />
+                        <Text style={[styles.announcementMetaText, { color: colors.icon }]}>
+                          {announcement.postedBy}
+                        </Text>
+                      </View>
+                      <View style={styles.announcementMeta}>
+                        <IconSymbol name="calendar-today" size={14} color={colors.icon} />
+                        <Text style={[styles.announcementMetaText, { color: colors.icon }]}>
+                          {new Date(announcement.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.announcementActions}>
+                      <TouchableOpacity style={[styles.actionButton, { borderColor: colors.tint }]}>
+                        <IconSymbol name="share" size={16} color={colors.tint} />
+                        <Text style={[styles.actionButtonText, { color: colors.tint }]}>Share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.actionButton, { borderColor: colors.tint }]}>
+                        <IconSymbol name="visibility" size={16} color={colors.tint} />
+                        <Text style={[styles.actionButtonText, { color: colors.tint }]}>View Details</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Card.Content>
+                </Card>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Floating Action Button */}
       <FAB
         style={[styles.fab, { backgroundColor: colors.tint }]}
-        icon="add"
-        label="Book Service"
-        onPress={() => Alert.alert('Book Service', 'Navigate to appointment booking')}
+        icon={activeTab === 0 ? "add" : "campaign"}
+        label={activeTab === 0 ? "Book Service" : "Filter"}
+        onPress={() => {
+          if (activeTab === 0) {
+            Alert.alert('Book Service', 'Navigate to appointment booking');
+          } else {
+            Alert.alert('Filter', 'Filter announcements');
+          }
+        }}
       />
 
       {/* Search Dialog */}
@@ -603,6 +643,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
+  // Tab Navigation
+  tabContainer: {
+    flexDirection: 'row',
+    elevation: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#007AFF',
+  },
+  tabText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  
   // Weather Card
   weatherCard: {
     margin: 16,
@@ -644,7 +710,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    marginBottom: 16,
+    marginTop: 20,
+    marginBottom: 20,
   },
   
   // Services Grid
@@ -705,6 +772,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
+  
   emergencyCard: {
     width: (width - 48) / 3,
     padding: 12,
@@ -816,5 +884,104 @@ const styles = StyleSheet.create({
   menuText: {
     marginLeft: 12,
     fontSize: 16,
+  },
+  
+  // Announcements tab extras
+  announcementsContainer: {
+    padding: 16,
+    gap: 12,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 20,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  emptyCard: {
+    elevation: 2,
+    borderRadius: 12,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    padding: 20,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyDescription: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  announcementTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  announcementFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  announcementMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  announcementMetaText: {
+    fontSize: 12,
+  },
+  announcementActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

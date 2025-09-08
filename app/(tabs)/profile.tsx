@@ -8,6 +8,7 @@ import { Alert, Dimensions, Image, Linking, ScrollView, StyleSheet, Text, Toucha
 import { Button, Card, Dialog, Divider, List, Portal, Switch, TextInput, Title } from 'react-native-paper';
 import { useAuth } from '../../lib/AuthContext';
 import { auth } from '../../lib/firebase';
+import { uploadFile } from '../../lib/Storage';
 import { fetchUserProfile, updateUserProfile } from '../../lib/User';
 
 const { width } = Dimensions.get('window');
@@ -40,6 +41,8 @@ const ProfileScreen = () => {
   const [occupation, setOccupation] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
+  const [validIdImage, setValidIdImage] = useState<string | null>(null);
+  const [validIdUploading, setValidIdUploading] = useState(false);
   
   // Emergency contacts
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
@@ -76,6 +79,7 @@ const ProfileScreen = () => {
             setOccupation((profile as any).occupation || '');
             setProfileImage((profile as any).profileImage || null);
             setIsVerified((profile as any).isVerified || false);
+            setValidIdImage((profile as any).validIdImage || null);
           }
         } catch (error) {
           console.error('Error loading profile:', error);
@@ -126,6 +130,37 @@ const ProfileScreen = () => {
     if (!result.canceled) {
       setProfileImage(result.assets[0].uri);
       setShowPhotoOptions(false);
+    }
+  };
+
+  const pickValidId = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [3, 2],
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setValidIdImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadValidId = async () => {
+    if (!auth.currentUser || !validIdImage) {
+      Alert.alert('Error', 'Please select a Valid ID image first.');
+      return;
+    }
+    try {
+      setValidIdUploading(true);
+      const path = `valid_ids/${auth.currentUser.uid}/${Date.now()}.jpg`;
+      const url = await uploadFile(validIdImage, path);
+      await updateUserProfile(auth.currentUser.uid, { validIdImage: url } as any);
+      setValidIdImage(url);
+      Alert.alert('Success', 'Valid ID uploaded successfully');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to upload Valid ID');
+    } finally {
+      setValidIdUploading(false);
     }
   };
 
@@ -366,6 +401,29 @@ const ProfileScreen = () => {
                 <Button mode="contained" onPress={handleUpdateProfile} style={styles.updateButton}>
                   Update Profile
                 </Button>
+              </Card.Content>
+            </Card>
+
+            {/* Valid ID */}
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title style={[styles.sectionTitle, { color: colors.text }]}>Valid ID</Title>
+                {validIdImage ? (
+                  <View style={styles.validIdPreview}>
+                    <Image source={{ uri: validIdImage }} style={styles.validIdImage} />
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyText, { color: colors.icon }]}>No Valid ID uploaded</Text>
+                )}
+                <View style={styles.validIdActions}>
+                  <TouchableOpacity onPress={pickValidId} style={[styles.validIdButton, { borderColor: colors.tint }]}>
+                    <IconSymbol name="photo-library" size={18} color={colors.tint} />
+                    <Text style={[styles.validIdButtonText, { color: colors.tint }]}>Choose Image</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={uploadValidId} disabled={!validIdImage || validIdUploading} style={[styles.validIdUpload, { backgroundColor: '#007AFF', opacity: !validIdImage || validIdUploading ? 0.6 : 1 }]}>
+                    <Text style={styles.validIdUploadText}>{validIdUploading ? 'Uploading...' : 'Upload'}</Text>
+                  </TouchableOpacity>
+                </View>
               </Card.Content>
             </Card>
 
@@ -734,6 +792,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     marginVertical: 20,
+  },
+  validIdPreview: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+    marginBottom: 12,
+  },
+  validIdImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  validIdActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  validIdButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  validIdButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  validIdUpload: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  validIdUploadText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   contactItem: {
     flexDirection: 'row',

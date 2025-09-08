@@ -31,6 +31,7 @@ export default function TabLayout() {
     { name: 'reports', title: 'Reports', icon: 'chart.bar.fill' },
     { name: 'admin-dashboard', title: 'Dashboard', icon: 'gearshape.fill' },
     { name: 'resident-records', title: 'Residents', icon: 'person.3.fill' },
+    { name: 'post-announcement', title: 'Post', icon: 'megaphone.fill' },
   ];
 
   const staffTabs: TabItem[] = [

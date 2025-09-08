@@ -1,14 +1,21 @@
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
-interface UserProfile {
+export interface UserProfile {
   uid?: string;
   email: string;
-  role: string;
+  role: string; // 'resident' | 'admin' | 'staff'
   name: string;
   contact: string;
-  purok: string;
-  householdInfo: string;
+  // Optional extended profile fields
+  address?: string;
+  dateOfBirth?: string;
+  civilStatus?: string;
+  occupation?: string;
+  profileImage?: string | null;
+  validIdImage?: string | null;
+  pushToken?: string;
+  // System fields
   createdAt?: string;
   updatedAt?: string;
   isVerified?: boolean;

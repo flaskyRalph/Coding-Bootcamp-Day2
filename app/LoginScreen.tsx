@@ -19,8 +19,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
-  const [purok, setPurok] = useState('');
-  const [householdInfo, setHouseholdInfo] = useState('');
+  
   const [isRegistering, setIsRegistering] = useState(false);
   const [selectedRole, setSelectedRole] = useState('resident');
   const [isLoading, setIsLoading] = useState(false);
@@ -93,9 +92,9 @@ const LoginScreen = () => {
 
   const handleRegister = async () => {
     console.log('Registration button pressed!'); // Debug log
-    console.log('Registration data:', { email, name, contact, purok, householdInfo, selectedRole }); // Debug log
+    console.log('Registration data:', { email, name, contact, selectedRole }); // Debug log
     
-    if (!email || !password || !name || !contact || !purok || !householdInfo) {
+    if (!email || !password || !name || !contact) {
       Alert.alert('Error', 'Please fill in all registration fields.');
       return;
     }
@@ -131,7 +130,7 @@ const LoginScreen = () => {
     
     try {
       console.log('Calling registerUser...'); // Debug log
-      const user = await registerUser(email, password, name, contact, purok, householdInfo, selectedRole);
+      const user = await registerUser(email, password, name, contact, '', '', selectedRole);
       console.log('Registration successful!', user.uid); // Debug log
       
       // Show success message
@@ -147,8 +146,7 @@ const LoginScreen = () => {
               setPassword('');
               setName('');
               setContact('');
-              setPurok('');
-              setHouseholdInfo('');
+              
               setIsRegistering(false);
               // The AuthContext will automatically handle navigation to dashboard
               // since the user is now authenticated
@@ -244,8 +242,7 @@ const LoginScreen = () => {
                     setPassword('test123');
                     setName('John Doe');
                     setContact('09123456789');
-                    setPurok('Purok 1');
-                    setHouseholdInfo('Family of 4, 2 adults, 2 children');
+                    
                     setSelectedRole('resident');
                   } else {
                     // Fill login form
@@ -284,29 +281,7 @@ const LoginScreen = () => {
                     />
                   </View>
 
-                  <View style={styles.inputContainer}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Purok</Text>
-                    <TextInput
-                      style={[styles.textInput, { borderColor: colors.icon, color: colors.text }]}
-                      value={purok}
-                      onChangeText={setPurok}
-                      placeholder="Enter your purok"
-                      placeholderTextColor={colors.icon}
-                    />
-                  </View>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Household Info</Text>
-                    <TextInput
-                      style={[styles.textInput, styles.multilineInput, { borderColor: colors.icon, color: colors.text }]}
-                      value={householdInfo}
-                      onChangeText={setHouseholdInfo}
-                      placeholder="Enter household information"
-                      placeholderTextColor={colors.icon}
-                      multiline
-                      numberOfLines={3}
-                    />
-                  </View>
+                  
 
                   <View style={styles.inputContainer}>
                     <Text style={[styles.inputLabel, { color: colors.text }]}>Register As</Text>

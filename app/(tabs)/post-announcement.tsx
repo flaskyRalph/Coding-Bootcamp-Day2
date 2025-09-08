@@ -1,13 +1,35 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
-import { Button, TextInput, Title } from 'react-native-paper';
+import { Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Button, TextInput, Title } from 'react-native-paper';
 import { createAnnouncement } from '../../lib/Announcements';
+import { useAuth } from '../../lib/AuthContext';
 import { auth } from '../../lib/firebase';
 
 export default function PostAnnouncementScreen() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const { user, userRole, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  // Only allow admins to use this screen
+  if (!user || userRole !== 'admin') {
+    return (
+      <View style={styles.container}>
+        <Title style={styles.title}>Post New Announcement</Title>
+        <View style={styles.accessDenied}>
+          <Text style={styles.accessText}>Access denied — you do not have permission to post announcements.</Text>
+        </View>
+      </View>
+    );
+  }
 
   const handlePostAnnouncement = async () => {
     if (!title || !content) {
@@ -16,6 +38,11 @@ export default function PostAnnouncementScreen() {
     }
     if (!auth.currentUser) {
       Alert.alert('Error', 'You must be logged in to post an announcement.');
+      return;
+    }
+
+    if (userRole !== 'admin') {
+      Alert.alert('Unauthorized', 'Only administrators can post announcements.');
       return;
     }
 
@@ -74,6 +101,23 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#f5f5f5",
     alignItems: "center",
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accessDenied: {
+    marginTop: 24,
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    elevation: 2,
+  },
+  accessText: {
+    color: '#333',
+    fontSize: 16,
+    textAlign: 'center',
   },
   title: {
     fontSize: 28,

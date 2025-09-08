@@ -1,6 +1,7 @@
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { UserProfile } from "./User";
 
 export const registerUser = async (
   email: string,
@@ -21,14 +22,13 @@ export const registerUser = async (
     console.log('Firebase Auth user created:', user.uid);
     
     // Create comprehensive user profile in Firestore
-    const userProfile = {
+    const userProfile: UserProfile = {
       uid: user.uid,
-      email: user.email,
+      email: user.email!,
       role: role,
       name: name.trim(),
       contact: contact.trim(),
-      purok: purok.trim(),
-      householdInfo: householdInfo.trim(),
+      validIdImage: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       isVerified: false, // Default to unverified for new registrations

@@ -5,7 +5,7 @@ import AdminGuard from '../../components/AdminGuard';
 import { getAllBookings, updateBookingStatus } from '../../lib/Bookings';
 import { sendPushNotification } from '../../lib/Notifications';
 import { getServices } from '../../lib/Services';
-import { fetchUserProfile } from '../../lib/User';
+import { fetchUserProfile, UserProfile } from '../../lib/User';
 
 interface Booking {
   id?: string;
@@ -22,16 +22,6 @@ interface Service {
   name: string;
   requirements: string;
   fee: number;
-}
-
-interface UserProfile {
-  email: string;
-  role: string;
-  name: string;
-  contact: string;
-  purok: string;
-  householdInfo: string;
-  pushToken?: string;
 }
 
 function AdminScreen() {

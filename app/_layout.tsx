@@ -15,6 +15,18 @@ import LoginScreen from './LoginScreen';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+// Suppress react-native-web pointerEvents deprecation warning
+if (typeof console !== 'undefined' && console.warn) {
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    const message = args[0];
+    if (typeof message === 'string' && message.includes('props.pointerEvents is deprecated')) {
+      return; // Suppress this specific warning
+    }
+    originalWarn.apply(console, args);
+  };
+}
+
 function RootLayoutNav() {
   return (
     <Stack>
